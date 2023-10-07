@@ -359,7 +359,7 @@ func fileNames(ctx context.Context, mode string, set *xo.Set) (map[string]bool, 
 				}
 			}
 			for _, t := range schema.Tables {
-				addFile(camelExport(singularize(t.Name)))
+				addFile(t.Name)
 			}
 			for _, v := range schema.Views {
 				addFile(camelExport(singularize(v.Name)))
@@ -532,7 +532,7 @@ func emitSchema(ctx context.Context, schema xo.Schema, emit func(xo.Template)) e
 			return err
 		}
 		emit(xo.Template{
-			Dest:     strings.ToLower(table.GoName) + ext,
+			Dest:     strings.ToLower(table.SQLName) + ext,
 			Partial:  "typedef",
 			SortType: table.Type,
 			SortName: table.GoName,
@@ -545,7 +545,7 @@ func emitSchema(ctx context.Context, schema xo.Schema, emit func(xo.Template)) e
 				return err
 			}
 			emit(xo.Template{
-				Dest:     strings.ToLower(table.GoName) + ext,
+				Dest:     strings.ToLower(table.SQLName) + ext,
 				Partial:  "index",
 				SortType: table.Type,
 				SortName: index.SQLName,
@@ -559,7 +559,7 @@ func emitSchema(ctx context.Context, schema xo.Schema, emit func(xo.Template)) e
 				return err
 			}
 			emit(xo.Template{
-				Dest:     strings.ToLower(table.GoName) + ext,
+				Dest:     strings.ToLower(table.SQLName) + ext,
 				Partial:  "foreignkey",
 				SortType: table.Type,
 				SortName: fkey.SQLName,
@@ -790,7 +790,7 @@ func camelExport(names ...string) string {
 	return snaker.ForceCamelIdentifier(strings.Join(names, "_"))
 }
 
-const ext = ".xo.go"
+const ext = ".go"
 
 // Funcs is a set of template funcs.
 type Funcs struct {
@@ -953,7 +953,7 @@ func (f *Funcs) schemafn(names ...string) string {
 		}
 		s += "."
 	}
-	return s + n
+	return n
 }
 
 // pkgfn returns the package name.
@@ -1198,7 +1198,7 @@ func (f *Funcs) db_prefix(name string, skip bool, vs ...interface{}) string {
 	var prefix string
 	var params []interface{}
 	for i, v := range vs {
-		var ignore []string
+		var ignore = []string{"CreateTime", "UpdateTime"}
 		switch x := v.(type) {
 		case string:
 			params = append(params, x)
@@ -1228,7 +1228,8 @@ func (f *Funcs) db_prefix(name string, skip bool, vs ...interface{}) string {
 // db_update generates a db.<name>Context(ctx, sqlstr, regularparams,
 // primaryparams)
 func (f *Funcs) db_update(name string, v interface{}) string {
-	var ignore, p []string
+	var p []string
+	var ignore = []string{"CreateTime", "UpdateTime"}
 	switch x := v.(type) {
 	case Table:
 		prefix := f.short(x.GoName) + "."
@@ -1307,7 +1308,7 @@ func (f *Funcs) logf(v interface{}, ignore ...interface{}) string {
 }
 
 func (f *Funcs) logf_update(v interface{}) string {
-	var ignore []string
+	var ignore = []string{"CreateTime", "UpdateTime"}
 	p := []string{"sqlstr"}
 	switch x := v.(type) {
 	case Table:
@@ -1463,6 +1464,9 @@ func (f *Funcs) sqlstr_insert_base(all bool, v interface{}) []string {
 			if z.IsSequence && !all {
 				continue
 			}
+			if z.SQLName == "create_time" || z.SQLName == "update_time" {
+				continue
+			}
 			fields, vals = append(fields, f.colname(z)), append(vals, f.nth(n))
 			n++
 		}
@@ -1534,6 +1538,9 @@ func (f *Funcs) sqlstr_update_base(prefix string, v interface{}) (int, []string)
 		var list []string
 		for _, z := range x.Fields {
 			if z.IsPrimary {
+				continue
+			}
+			if z.SQLName == "create_time" || z.SQLName == "update_time" {
 				continue
 			}
 			name, param := f.colname(z), f.nth(n)
@@ -1617,6 +1624,9 @@ func (f *Funcs) sqlstr_upsert_mysql(v interface{}) []string {
 		i := len(x.Fields)
 		for _, z := range x.Fields {
 			if z.IsSequence {
+				continue
+			}
+			if z.SQLName == "create_time" || z.SQLName == "update_time" {
 				continue
 			}
 			name := f.colname(z)
@@ -1916,7 +1926,7 @@ func (f *Funcs) field(field Field) (string, error) {
 	if s := buf.String(); s != "" {
 		tag = " `" + s + "`"
 	}
-	return fmt.Sprintf("\t%s %s%s // %s", field.GoName, f.typefn(field.Type), tag, field.SQLName), nil
+	return fmt.Sprintf("\t%s %s%s // %s", field.GoName, f.typefn(field.Type), tag, field.Comment), nil
 }
 
 // short generates a safe Go identifier for typ. typ is first checked

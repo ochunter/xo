@@ -1,9 +1,16 @@
 {{ define "db" -}}
+
+import "github.com/ochunter/ent/infra/ilog"
+
 var (
+	logger = ilog.New("models")
 	// logf is used by generated code to log SQL queries.
-	logf = func(string, ...interface{}) {}
+	logf = func(s string, v ...any) {
+		s = strings.ReplaceAll(s, "?", "%v")
+		logger.I(s, v...)
+	}
 	// errf is used by generated code to log SQL errors.
-	errf = func(string, ...interface{}) {}
+	errf = logger.E
 )
 
 // logerror logs the error and returns it.
@@ -14,6 +21,7 @@ func logerror(err error) error {
 
 // Logf logs a message using the package logger.
 func Logf(s string, v ...interface{}) {
+	s = strings.ReplaceAll(s, "?", "%v")
 	logf(s, v...)
 }
 
@@ -29,6 +37,7 @@ func SetLogger(logger interface{}) {
 
 // Errorf logs an error message using the package error logger.
 func Errorf(s string, v ...interface{}) {
+	s = strings.ReplaceAll(s, "?", "%v")
 	errf(s, v...)
 }
 

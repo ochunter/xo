@@ -268,7 +268,7 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	// insert (primary key generated and returned by database)
 	{{ sqlstr "insert" $t }}
 	// run
-	{{ logf $t $t.PrimaryKeys }}
+	{{ logf $t $t.PrimaryKeys "CreateTime" "UpdateTime" }}
 {{ if (driver "postgres") -}}
 	if err := {{ db_prefix "QueryRow" true $t }}.Scan(&{{ short $t }}.{{ (index $t.PrimaryKeys 0).GoName }}); err != nil {
 		return logerror(err)
@@ -379,7 +379,7 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	{{ sqlstr "upsert" $t }}
 	// run
 	{{ logf $t }}
-	if _, err := {{ db_prefix "Exec" false $t }}; err != nil {
+	if _, err := {{ db_prefix "Exec" true $t }}; err != nil {
 		return logerror(err)
 	}
 	// set exists
