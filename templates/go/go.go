@@ -1276,7 +1276,7 @@ func (f *Funcs) logf_pkeys(v interface{}) string {
 	case Table:
 		p = append(p, f.names(f.short(x.GoName)+".", x.PrimaryKeys))
 	}
-	return fmt.Sprintf("logf(%s)", strings.Join(p, ", "))
+	return fmt.Sprintf("logf(ctx, %s)", strings.Join(p, ", "))
 }
 
 func (f *Funcs) logf(v interface{}, ignore ...interface{}) string {
@@ -1304,7 +1304,7 @@ func (f *Funcs) logf(v interface{}, ignore ...interface{}) string {
 	default:
 		return fmt.Sprintf("[[ UNSUPPORTED TYPE 12: %T ]]", v)
 	}
-	return fmt.Sprintf("logf(%s)", strings.Join(p, ", "))
+	return fmt.Sprintf("logf(ctx, %s)", strings.Join(p, ", "))
 }
 
 func (f *Funcs) logf_update(v interface{}) string {
@@ -1320,7 +1320,7 @@ func (f *Funcs) logf_update(v interface{}) string {
 	default:
 		return fmt.Sprintf("[[ UNSUPPORTED TYPE 13: %T ]]", v)
 	}
-	return fmt.Sprintf("logf(%s)", strings.Join(p, ", "))
+	return fmt.Sprintf("logf(ctx, %s)", strings.Join(p, ", "))
 }
 
 // names generates a list of names.

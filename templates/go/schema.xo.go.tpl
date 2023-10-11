@@ -121,7 +121,7 @@ func (err ErrInvalid{{ $e.GoName }}) Error() string {
 	// query
 	{{ sqlstr "index" $i }}
 	// run
-	logf(sqlstr, {{ params $i.Fields false }})
+	logf(ctx, sqlstr, {{ params $i.Fields false }})
 {{- if $i.IsUnique }}
 	{{ short $i.Table }} := {{ $i.Table.GoName }}{
 	{{- if $i.Table.PrimaryKeys }}
@@ -129,13 +129,13 @@ func (err ErrInvalid{{ $e.GoName }}) Error() string {
 	{{ end -}}
 	}
 	if err := {{ db "QueryRow"  $i }}.Scan({{ names (print "&" (short $i.Table) ".") $i.Table }}); err != nil {
-		return nil, logerror(err)
+		return nil, logerror(ctx, err)
 	}
 	return &{{ short $i.Table }}, nil
 {{- else }}
 	rows, err := {{ db "Query" $i }}
 	if err != nil {
-		return nil, logerror(err)
+		return nil, logerror(ctx, err)
 	}
 	defer rows.Close()
 	// process
@@ -148,12 +148,12 @@ func (err ErrInvalid{{ $e.GoName }}) Error() string {
 		}
 		// scan
 		if err := rows.Scan({{ names_ignore (print "&" (short $i.Table) ".")  $i.Table }}); err != nil {
-			return nil, logerror(err)
+			return nil, logerror(ctx, err)
 		}
 		res = append(res, &{{ short $i.Table }})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, logerror(err)
+		return nil, logerror(ctx, err)
 	}
 	return res, nil
 {{- end }}
@@ -187,23 +187,23 @@ func (err ErrInvalid{{ $e.GoName }}) Error() string {
 {{- range $p.Returns }}
 	var {{ check_name .GoName }} {{ type .Type }}
 {{- end }}
-	logf(sqlstr, {{ params $p.Params false }})
+	logf(ctx, sqlstr, {{ params $p.Params false }})
 {{- if and (driver "sqlserver" "oracle") (eq $p.Type "procedure")}}
 	if _, err := {{ db_named "Exec" $p }}; err != nil {
 {{- else }}
 	if err := {{ db "QueryRow" $p }}.Scan({{ names "&" $p.Returns }}); err != nil {
 {{- end }}
-		return {{ zero $p.Returns }}, logerror(err)
+		return {{ zero $p.Returns }}, logerror(ctx, err)
 	}
 	return {{ range $p.Returns }}{{ check_name .GoName }}, {{ end }}nil
 {{- else }}
-	logf(sqlstr)
+	logf(ctx, sqlstr)
 {{- if driver "sqlserver" "oracle" }}
 	if _, err := {{ db_named "Exec" $p }}; err != nil {
 {{- else }}
 	if _, err := {{ db "Exec" $p }}; err != nil {
 {{- end }}
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 	return nil
 {{- end }}
@@ -252,9 +252,9 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 {{ recv_context $t "Insert" }} {
 	switch {
 	case {{ short $t }}._exists: // already exists
-		return logerror(&ErrInsertFailed{ErrAlreadyExists})
+		return logerror(ctx, &ErrInsertFailed{ErrAlreadyExists})
 	case {{ short $t }}._deleted: // deleted
-		return logerror(&ErrInsertFailed{ErrMarkedForDeletion})
+		return logerror(ctx, &ErrInsertFailed{ErrMarkedForDeletion})
 	}
 {{ if $t.Manual -}}
 	// insert (manual)
@@ -262,7 +262,7 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	// run
 	{{ logf $t }}
 	if _, err := {{ db_prefix "Exec" false $t }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- else -}}
 	// insert (primary key generated and returned by database)
@@ -271,38 +271,38 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	{{ logf $t $t.PrimaryKeys "CreateTime" "UpdateTime" }}
 {{ if (driver "postgres") -}}
 	if err := {{ db_prefix "QueryRow" true $t }}.Scan(&{{ short $t }}.{{ (index $t.PrimaryKeys 0).GoName }}); err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- else if (driver "sqlserver") -}}
 	rows, err := {{ db_prefix "Query" true $t }}
 	if err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 	defer rows.Close()
 	// retrieve id
 	var id int64
 	for rows.Next() {
 		if err := rows.Scan(&id); err != nil {
-			return logerror(err)
+			return logerror(ctx, err)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- else if (driver "oracle") -}}
 	var id int64
 	if _, err := {{ db_prefix "Exec" true $t (named "pk" "&id" true) }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- else -}}
 	res, err := {{ db_prefix "Exec" true $t }}
 	if err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 	// retrieve id
 	id, err := res.LastInsertId()
 	if err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- end -}}
 {{ if not (driver "postgres") -}}
@@ -330,16 +330,16 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 {{ recv_context $t "Update" }} {
 	switch {
 	case !{{ short $t }}._exists: // doesn't exist
-		return logerror(&ErrUpdateFailed{ErrDoesNotExist})
+		return logerror(ctx, &ErrUpdateFailed{ErrDoesNotExist})
 	case {{ short $t }}._deleted: // deleted
-		return logerror(&ErrUpdateFailed{ErrMarkedForDeletion})
+		return logerror(ctx, &ErrUpdateFailed{ErrMarkedForDeletion})
 	}
 	// update with {{ if driver "postgres" }}composite {{ end }}primary key
 	{{ sqlstr "update" $t }}
 	// run
 	{{ logf_update $t }}
 	if _, err := {{ db_update "Exec" $t }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 	return nil
 }
@@ -373,14 +373,14 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 {{ recv_context $t "Upsert" }} {
 	switch {
 	case {{ short $t }}._deleted: // deleted
-		return logerror(&ErrUpsertFailed{ErrMarkedForDeletion})
+		return logerror(ctx, &ErrUpsertFailed{ErrMarkedForDeletion})
 	}
 	// upsert
 	{{ sqlstr "upsert" $t }}
 	// run
 	{{ logf $t }}
 	if _, err := {{ db_prefix "Exec" true $t }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 	// set exists
 	{{ short $t }}._exists = true
@@ -409,7 +409,7 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	// run
 	{{ logf_pkeys $t }}
 	if _, err := {{ db "Exec" (print (short $t) "." (index $t.PrimaryKeys 0).GoName) }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- else -}}
 	// delete with composite primary key
@@ -417,7 +417,7 @@ func ({{ short $t }} *{{ $t.GoName }}) Deleted() bool {
 	// run
 	{{ logf_pkeys $t }}
 	if _, err := {{ db "Exec" (names (print (short $t) ".") $t.PrimaryKeys) }}; err != nil {
-		return logerror(err)
+		return logerror(ctx, err)
 	}
 {{- end }}
 	// set deleted

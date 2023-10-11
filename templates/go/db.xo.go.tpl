@@ -5,24 +5,24 @@ import "github.com/ochunter/ent/infra/ilog"
 var (
 	logger = ilog.New("models")
 	// logf is used by generated code to log SQL queries.
-	logf = func(s string, v ...any) {
+	logf = func(ctx context.Context, s string, v ...any) {
 		s = strings.ReplaceAll(s, "?", "%v")
-		logger.I(s, v...)
+		logger.I(ctx, s, v...)
 	}
 	// errf is used by generated code to log SQL errors.
 	errf = logger.E
 )
 
 // logerror logs the error and returns it.
-func logerror(err error) error {
-	errf("ERROR: %v", err)
+func logerror(ctx context.Context, err error) error {
+	errf(ctx, "ERROR: %v", err)
 	return err
 }
 
 // Logf logs a message using the package logger.
-func Logf(s string, v ...interface{}) {
+func Logf(ctx context.Context, s string, v ...interface{}) {
 	s = strings.ReplaceAll(s, "?", "%v")
-	logf(s, v...)
+	logf(ctx, s, v...)
 }
 
 // SetLogger sets the package logger. Valid logger types:
@@ -36,9 +36,9 @@ func SetLogger(logger interface{}) {
 }
 
 // Errorf logs an error message using the package error logger.
-func Errorf(s string, v ...interface{}) {
+func Errorf(ctx context.Context, s string, v ...interface{}) {
 	s = strings.ReplaceAll(s, "?", "%v")
-	errf(s, v...)
+	errf(ctx, s, v...)
 }
 
 // SetErrorLogger sets the package error logger. Valid logger types:
@@ -52,17 +52,17 @@ func SetErrorLogger(logger interface{}) {
 }
 
 // convLogger converts logger to the standard logger interface.
-func convLogger(logger interface{}) func(string, ...interface{}) {
+func convLogger(logger interface{}) func(context.Context, string, ...interface{}) {
 	switch z := logger.(type) {
 	case io.Writer:
-		return func(s string, v ...interface{}) {
+		return func(ctx context.Context, s string, v ...interface{}) {
 			fmt.Fprintf(z, s, v...)
 		}
 	case func(string, ...interface{}) (int, error): // fmt.Printf
-		return func(s string, v ...interface{}) {
+		return func(ctx context.Context, s string, v ...interface{}) {
 			_, _ = z(s, v...)
 		}
-	case func(string, ...interface{}): // log.Printf
+	case func(context.Context, string, ...interface{}): // log.Printf
 		return z
 	}
 	panic(fmt.Sprintf("unsupported logger type %T", logger))
@@ -77,6 +77,10 @@ type DB interface {
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
 	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
 	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+    Select(dest interface{}, query string, args ...interface{}) error
+    Get(dest interface{}, query string, args ...interface{}) error
+    Exec(query string, args ...any) (sql.Result, error)
+    NamedExec(query string, arg interface{}) (sql.Result, error)
 {{- end -}}{{- if or context_both context_disable }}
 	Exec(string, ...interface{}) (sql.Result, error)
 	Query(string, ...interface{}) (*sql.Rows, error)
